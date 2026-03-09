@@ -1,1 +1,1 @@
-# cricket-score-updadation
+# cricket-score-updation
