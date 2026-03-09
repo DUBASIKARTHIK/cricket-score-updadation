@@ -1,0 +1,251 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>CREX — Live Cricket</title>
+<link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@400;600;700&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+  :root {
+    --bg: #0a0e1a; --surface: #111827; --surface2: #1a2235; --border: #1e3a5f;
+    --accent: #00d4ff; --accent2: #ff6b35; --green: #00ff88; --red: #ff3b5c;
+    --yellow: #ffd700; --text: #e2e8f0; --muted: #64748b;
+    --font: 'Rajdhani', sans-serif; --mono: 'JetBrains Mono', monospace;
+  }
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body { background:var(--bg); color:var(--text); font-family:var(--font); min-height:100vh; }
+
+  body::before {
+    content:''; position:fixed; inset:0; pointer-events:none; z-index:0;
+    background: radial-gradient(ellipse at 10% 20%, rgba(0,212,255,0.05) 0%, transparent 55%),
+                radial-gradient(ellipse at 90% 80%, rgba(255,107,53,0.04) 0%, transparent 55%);
+  }
+
+  /* NAVBAR */
+  .navbar {
+    position:sticky; top:0; z-index:50;
+    background:rgba(10,14,26,0.92); backdrop-filter:blur(16px);
+    border-bottom:1px solid var(--border);
+    display:flex; align-items:center; justify-content:space-between;
+    padding:14px 24px;
+  }
+  .nav-logo { display:flex; align-items:center; gap:10px; }
+  .nav-icon { width:34px;height:34px; background:linear-gradient(135deg,var(--accent),var(--accent2)); border-radius:8px; display:flex;align-items:center;justify-content:center; font-size:16px; }
+  .nav-brand { font-size:22px; font-weight:700; color:var(--green); letter-spacing:3px; }
+  .nav-sub { font-size:10px; color:var(--muted); font-family:var(--mono); letter-spacing:2px; }
+  .live-pill { display:flex;align-items:center;gap:6px; font-size:11px; color:var(--green); font-family:var(--mono); font-weight:700; background:rgba(0,255,136,0.07); border:1px solid rgba(0,255,136,0.2); padding:4px 10px; border-radius:20px; }
+  .live-pill::before { content:''; width:6px;height:6px; border-radius:50%; background:var(--green); animation:pulse 1.4s ease-in-out infinite; }
+  @keyframes pulse { 0%,100%{opacity:1;transform:scale(1)} 50%{opacity:.4;transform:scale(.7)} }
+
+  .main { max-width:700px; margin:0 auto; padding:28px 16px; position:relative; z-index:1; }
+
+  /* HERO STATS */
+  .hero-stats { display:grid; grid-template-columns:repeat(3,1fr); gap:12px; margin-bottom:28px; }
+  .stat-card { background:var(--surface); border:1px solid var(--border); border-radius:10px; padding:16px; text-align:center; position:relative; overflow:hidden; }
+  .stat-card::before { content:''; position:absolute; top:0;left:0;right:0;height:2px; }
+  .stat-card:nth-child(1)::before { background:var(--red); }
+  .stat-card:nth-child(2)::before { background:var(--accent); }
+  .stat-card:nth-child(3)::before { background:var(--muted); }
+  .stat-val { font-size:30px; font-weight:700; font-family:var(--mono); }
+  .stat-card:nth-child(1) .stat-val { color:var(--red); }
+  .stat-card:nth-child(2) .stat-val { color:var(--accent); }
+  .stat-card:nth-child(3) .stat-val { color:var(--muted); }
+  .stat-lbl { font-size:10px; color:var(--muted); text-transform:uppercase; letter-spacing:2px; font-family:var(--mono); margin-top:4px; }
+
+  /* FILTER */
+  .section-top { display:flex; align-items:center; justify-content:space-between; margin-bottom:16px; }
+  .section-title { font-size:13px; color:var(--muted); text-transform:uppercase; letter-spacing:2px; font-family:var(--mono); }
+  .filters { display:flex; gap:6px; }
+  .filter-tab { padding:5px 14px; border-radius:6px; font-size:11px; font-family:var(--mono); font-weight:700; cursor:pointer; border:1px solid var(--border); color:var(--muted); transition:all .15s; }
+  .filter-tab:hover { color:var(--text); border-color:var(--text); }
+  .filter-tab.active { color:var(--accent); border-color:var(--accent); background:rgba(0,212,255,0.07); }
+
+  /* MATCH CARDS */
+  .match-card {
+    background:var(--surface); border:1px solid var(--border); border-radius:12px;
+    padding:18px 20px; margin-bottom:12px; cursor:pointer;
+    transition:border-color .2s, transform .15s, box-shadow .2s;
+    position:relative; overflow:hidden;
+    animation: cardIn .35s ease both;
+  }
+  .match-card:hover { border-color:rgba(0,212,255,0.35); transform:translateY(-2px); box-shadow:0 8px 28px rgba(0,0,0,0.3); }
+  @keyframes cardIn { from{opacity:0;transform:translateY(12px)} to{opacity:1;transform:translateY(0)} }
+  .match-card.live-card::before { content:''; position:absolute; top:0;left:0;bottom:0;width:3px; background:var(--red); animation:barPulse 1.5s ease-in-out infinite; }
+  .match-card.done-card::before { content:''; position:absolute; top:0;left:0;bottom:0;width:3px; background:var(--muted); }
+  @keyframes barPulse { 0%,100%{opacity:1}50%{opacity:.3} }
+
+  .card-header { display:flex; align-items:flex-start; justify-content:space-between; margin-bottom:14px; }
+  .match-teams { font-size:19px; font-weight:700; letter-spacing:.5px; margin-bottom:5px; }
+  .match-meta { display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
+  .status-badge { font-size:10px; font-family:var(--mono); font-weight:700; padding:2px 8px; border-radius:4px; text-transform:uppercase; letter-spacing:1px; }
+  .badge-live { background:rgba(255,59,92,.15); border:1px solid var(--red); color:var(--red); }
+  .badge-done { background:rgba(100,116,139,.12); border:1px solid var(--muted); color:var(--muted); }
+  .meta-text { font-size:11px; color:var(--muted); font-family:var(--mono); }
+  .score-display { text-align:right; }
+  .score-big { font-size:28px; font-weight:700; font-family:var(--mono); color:var(--text); }
+  .score-overs { font-size:12px; color:var(--muted); font-family:var(--mono); }
+
+  /* PROGRESS BAR */
+  .progress-wrap { margin-bottom:12px; }
+  .progress-bar-bg { height:4px; background:var(--surface2); border-radius:2px; overflow:hidden; }
+  .progress-bar-fill { height:100%; border-radius:2px; background:linear-gradient(90deg,var(--accent),var(--green)); transition:width .5s ease; }
+
+  /* BATSMEN / BOWLER ROW */
+  .players-row { display:flex; align-items:center; justify-content:space-between; padding-top:12px; border-top:1px solid var(--border); }
+  .player-item { display:flex; flex-direction:column; gap:2px; }
+  .player-name { font-size:13px; font-weight:700; color:var(--text); }
+  .player-stat { font-size:11px; color:var(--accent); font-family:var(--mono); }
+  .player-label { font-size:10px; color:var(--muted); font-family:var(--mono); text-transform:uppercase; letter-spacing:1px; }
+  .vs-sep { font-size:11px; color:var(--border); font-family:var(--mono); }
+
+  .watch-btn {
+    display:flex; align-items:center; gap:6px;
+    padding:7px 16px; border-radius:7px;
+    background:rgba(0,212,255,0.08); border:1px solid var(--accent);
+    color:var(--accent); font-family:var(--font); font-size:13px; font-weight:700;
+    cursor:pointer; transition:all .15s; white-space:nowrap;
+  }
+  .watch-btn:hover { background:rgba(0,212,255,0.2); }
+
+  /* EMPTY */
+  .empty { text-align:center; padding:60px 20px; color:var(--muted); font-family:var(--mono); }
+  .empty-icon { font-size:48px; margin-bottom:12px; opacity:.3; }
+
+  /* LOADING */
+  .loading { text-align:center; padding:40px; color:var(--muted); font-family:var(--mono); font-size:13px; }
+  .spinner { width:28px;height:28px; border:2px solid var(--border); border-top-color:var(--accent); border-radius:50%; animation:spin .7s linear infinite; margin:0 auto 12px; }
+  @keyframes spin { to{transform:rotate(360deg)} }
+</style>
+</head>
+<body>
+
+<nav class="navbar">
+  <div class="nav-logo">
+    <div class="nav-icon">🏏</div>
+    <div>
+      <div class="nav-brand">CREX</div>
+      <div class="nav-sub">LIVE CRICKET</div>
+    </div>
+  </div>
+  <div class="live-pill">LIVE UPDATES</div>
+</nav>
+
+<div class="main">
+
+  <!-- STATS -->
+  <div class="hero-stats">
+    <div class="stat-card"><div class="stat-val" id="statLive">0</div><div class="stat-lbl">Live Now</div></div>
+    <div class="stat-card"><div class="stat-val" id="statTotal">0</div><div class="stat-lbl">Total Matches</div></div>
+    <div class="stat-card"><div class="stat-val" id="statDone">0</div><div class="stat-lbl">Completed</div></div>
+  </div>
+
+  <!-- FILTER + LIST -->
+  <div class="section-top">
+    <div class="section-title">Matches</div>
+    <div class="filters">
+      <div class="filter-tab active" onclick="filterBy('ALL',this)">All</div>
+      <div class="filter-tab" onclick="filterBy('live',this)">Live</div>
+      <div class="filter-tab" onclick="filterBy('completed',this)">Done</div>
+    </div>
+  </div>
+
+  <div id="matchList"><div class="loading"><div class="spinner"></div>Loading matches...</div></div>
+
+</div>
+
+<script>
+const supabaseClient = supabase.createClient(
+  "https://kgmvprtxxvkaavqziwpx.supabase.co",
+  "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtnbXZwcnR4eHZrYWF2cXppd3B4Iiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc3MTM0MTIyMCwiZXhwIjoyMDg2OTE3MjIwfQ.3N3nLWx7ZnfvSCdQOAbCn9TWByxCTep5Ycm3HVUigfI"
+);
+
+let allMatches = [];
+let currentFilter = 'ALL';
+
+async function loadMatches() {
+  const { data } = await supabaseClient.from('matches').select('*').order('id', { ascending: false });
+  if (data) { allMatches = data; render(); }
+}
+
+function render() {
+  const live = allMatches.filter(m => m.status === 'live').length;
+  const done = allMatches.filter(m => m.status === 'completed').length;
+  document.getElementById('statLive').textContent = live;
+  document.getElementById('statTotal').textContent = allMatches.length;
+  document.getElementById('statDone').textContent = done;
+
+  const list = currentFilter === 'ALL' ? allMatches : allMatches.filter(m => m.status === currentFilter);
+  const el = document.getElementById('matchList');
+
+  if (!list.length) {
+    el.innerHTML = `<div class="empty"><div class="empty-icon">🏏</div>No matches found.</div>`;
+    return;
+  }
+
+  el.innerHTML = list.map((m, i) => {
+    const isLive = m.status === 'live';
+    const pct = m.overs_limit ? Math.min(100, (parseFloat(m.overs || 0) / m.overs_limit) * 100) : 0;
+    const overs = m.overs || '0.0';
+    const venue = m.venue ? `· ${m.venue}` : '';
+    const toss = m.toss_winner ? `${m.toss_winner} won toss` : '';
+
+    return `
+    <div class="match-card ${isLive ? 'live-card' : 'done-card'}" onclick="openMatch(${m.id})" style="animation-delay:${i * 0.06}s">
+      <div class="card-header">
+        <div>
+          <div class="match-teams">${m.team_batting} vs ${m.team_bowling}</div>
+          <div class="match-meta">
+            <span class="status-badge ${isLive ? 'badge-live' : 'badge-done'}">${m.status}</span>
+            ${m.overs_limit ? `<span class="meta-text">${m.overs_limit} Overs</span>` : ''}
+            ${venue ? `<span class="meta-text">${venue}</span>` : ''}
+            ${toss ? `<span class="meta-text">${toss}</span>` : ''}
+          </div>
+        </div>
+        <div class="score-display">
+          <div class="score-big">${m.runs ?? 0}/${m.wickets ?? 0}</div>
+          <div class="score-overs">${overs} Overs</div>
+        </div>
+      </div>
+      ${m.overs_limit ? `
+      <div class="progress-wrap">
+        <div class="progress-bar-bg"><div class="progress-bar-fill" style="width:${pct}%"></div></div>
+      </div>` : ''}
+      <div class="players-row">
+        <div style="display:flex;gap:20px">
+          <div class="player-item">
+            <div class="player-label">Batting</div>
+            <div class="player-name">${m.team_batting}</div>
+          </div>
+          <div class="vs-sep" style="align-self:center">vs</div>
+          <div class="player-item">
+            <div class="player-label">Bowling</div>
+            <div class="player-name">${m.team_bowling}</div>
+          </div>
+        </div>
+        <div class="watch-btn">▶ Watch</div>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function filterBy(status, el) {
+  currentFilter = status;
+  document.querySelectorAll('.filter-tab').forEach(t => t.classList.remove('active'));
+  el.classList.add('active');
+  render();
+}
+
+function openMatch(id) {
+  window.location = '/match/' + id;
+}
+
+// Realtime
+supabaseClient.channel('public-matches')
+  .on('postgres_changes', { event: '*', schema: 'public', table: 'matches' }, () => loadMatches())
+  .subscribe();
+
+loadMatches();
+</script>
+</body>
+</html>
