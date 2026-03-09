@@ -24,7 +24,9 @@ def matches():
 def match_live(match_id):
     return render_template("match_live.html", match_id=match_id)
 
-
+@app.route("/ping")
+def ping():
+    return "Server is running"
 # ─── Run ──────────────────────────────────────────────────────────────────────
 
 if __name__ == "__main__":
