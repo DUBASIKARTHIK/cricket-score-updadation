@@ -170,12 +170,14 @@ async function loadMatches() {
 
 function render() {
   const live = allMatches.filter(m => m.status === 'live').length;
-  const done = allMatches.filter(m => m.status === 'completed').length;
+  const done = allMatches.filter(m => m.status === 'complete').length;
   document.getElementById('statLive').textContent = live;
   document.getElementById('statTotal').textContent = allMatches.length;
   document.getElementById('statDone').textContent = done;
 
-  const list = currentFilter === 'ALL' ? allMatches : allMatches.filter(m => m.status === currentFilter);
+  const list = currentFilter === 'ALL' ? allMatches
+    : currentFilter === 'live' ? allMatches.filter(m => m.status === 'live')
+    : allMatches.filter(m => m.status === 'complete');
   const el = document.getElementById('matchList');
 
   if (!list.length) {
@@ -185,26 +187,48 @@ function render() {
 
   el.innerHTML = list.map((m, i) => {
     const isLive = m.status === 'live';
+    const isDone = m.status === 'complete';
+    const curInn = m.innings || 1;
     const pct = m.overs_limit ? Math.min(100, (parseFloat(m.overs || 0) / m.overs_limit) * 100) : 0;
     const overs = m.overs || '0.0';
     const venue = m.venue ? `· ${m.venue}` : '';
     const toss = m.toss_winner ? `${m.toss_winner} won toss` : '';
 
+    // build score display
+    const inn1Score = `${m.runs ?? 0}/${m.wickets ?? 0} <small style="font-size:11px;color:var(--muted)">(${overs})</small>`;
+    const inn2Score = (m.runs2 || m.wickets2 || curInn === 2)
+      ? `${m.runs2 ?? 0}/${m.wickets2 ?? 0} <small style="font-size:11px;color:var(--muted)">(${m.overs2 || '0.0'})</small>` : '';
+
+    // target/result line
+    let infoLine = '';
+    if (curInn === 2 && !isDone) {
+      const target = (m.runs ?? 0) + 1;
+      const need = target - (m.runs2 ?? 0);
+      const legalBalls2 = 0; // approximate
+      infoLine = `<div style="font-size:11px;font-family:var(--mono);color:var(--yellow);margin-top:4px">Target: ${target} · Need ${need > 0 ? need : 0} more</div>`;
+    }
+
     return `
     <div class="match-card ${isLive ? 'live-card' : 'done-card'}" onclick="openMatch(${m.id})" style="animation-delay:${i * 0.06}s">
       <div class="card-header">
-        <div>
+        <div style="flex:1">
           <div class="match-teams">${m.team_batting} vs ${m.team_bowling}</div>
           <div class="match-meta">
-            <span class="status-badge ${isLive ? 'badge-live' : 'badge-done'}">${m.status}</span>
+            <span class="status-badge ${isLive ? 'badge-live' : 'badge-done'}">${isDone ? 'COMPLETED' : m.status.toUpperCase()}</span>
             ${m.overs_limit ? `<span class="meta-text">${m.overs_limit} Overs</span>` : ''}
             ${venue ? `<span class="meta-text">${venue}</span>` : ''}
             ${toss ? `<span class="meta-text">${toss}</span>` : ''}
           </div>
+          ${infoLine}
         </div>
-        <div class="score-display">
+        <div class="score-display" style="text-align:right">
+          <div style="font-size:11px;color:var(--muted);font-family:var(--mono);margin-bottom:2px">${m.team_batting}</div>
           <div class="score-big">${m.runs ?? 0}/${m.wickets ?? 0}</div>
-          <div class="score-overs">${overs} Overs</div>
+          <div class="score-overs">${overs} ov</div>
+          ${inn2Score ? `<div style="margin-top:6px;border-top:1px solid var(--border);padding-top:6px">
+            <div style="font-size:11px;color:var(--muted);font-family:var(--mono);margin-bottom:2px">${m.team_bowling}</div>
+            <div class="score-big" style="font-size:20px">${inn2Score}</div>
+          </div>` : ''}
         </div>
       </div>
       ${m.overs_limit ? `
@@ -212,18 +236,11 @@ function render() {
         <div class="progress-bar-bg"><div class="progress-bar-fill" style="width:${pct}%"></div></div>
       </div>` : ''}
       <div class="players-row">
-        <div style="display:flex;gap:20px">
-          <div class="player-item">
-            <div class="player-label">Batting</div>
-            <div class="player-name">${m.team_batting}</div>
-          </div>
-          <div class="vs-sep" style="align-self:center">vs</div>
-          <div class="player-item">
-            <div class="player-label">Bowling</div>
-            <div class="player-name">${m.team_bowling}</div>
-          </div>
+        <div style="font-size:11px;color:var(--muted);font-family:var(--mono)">
+          ${curInn === 1 ? '🏏 1st Innings' : '🏏 2nd Innings'}
+          ${isDone ? ' · Match Complete' : ''}
         </div>
-        <div class="watch-btn">▶ Watch</div>
+        <div class="watch-btn">${isLive ? '▶ Watch Live' : '📊 View Scorecard'}</div>
       </div>
     </div>`;
   }).join('');
